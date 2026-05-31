@@ -1,0 +1,11 @@
+# Arquivos compilados
+*.class
+*.ser
+
+# Pastas de build
+bin/
+build/
+out/
+
+# Eclipse
+.settings/
