@@ -7,7 +7,8 @@ import java.util.List;
 
 // representa o registro de entrada/saída de um veículo
 // o serializable permite salvar/carregar este objeto em arquivo .ser
-public class Registro implements Serializable {
+// Comparable<Registro> permite ordenar registros por data
+public class Registro implements Serializable, Comparable<Registro>{
     
     // número de versão para controle de compatibilidade na serialização
     private static final long serialVersionUID = 1L;
@@ -30,6 +31,18 @@ public class Registro implements Serializable {
         this.tipoVeiculo = tipoVeiculo;
         this.idsVagas    = idsVagas;
         this.dataEntrada = dataEntrada;
+    }
+    
+    // do registro mais antigo para o mais recente
+    // o TreeSet usa este método para manter os registros em ordem cronológica
+    @Override
+    public int compareTo(Registro outro) {
+        int resultado = this.dataEntrada.compareTo(outro.dataEntrada);
+        if (resultado != 0) {
+            return resultado;
+        }
+        // desempate pela placa, para evitar duplicatas no TreeSet
+        return this.placa.compareTo(outro.placa);
     }
 
     public String        getPlaca()        { return placa;        }
