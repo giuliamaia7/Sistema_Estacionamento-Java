@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Comparator;
+import java.util.stream.Collectors;
+import java.util.TreeSet;
 
 
 public class GerenciadorEstacionamento {
@@ -132,6 +134,38 @@ public class GerenciadorEstacionamento {
     private void validarPlaca(String placa) throws PlacaInvalidaException {
         if (placa == null || placa.isBlank() || !placa.toUpperCase().matches(REGEX_PLACA))
             throw new PlacaInvalidaException(placa);
+    }
+
+    /*c04: TreeSet organiza os registros de forma automatica usando a ordem natural
+    Usa o compareTo() criado na classe Registro (ordem cronológica de entrada)
+    Evita duplicatas e mantem os logs sempre ordenados por data sem usar sort() 
+    */
+    public TreeSet<Registro> getRegistrosOrdenados() {
+        return new TreeSet<>(registros);
+    }
+
+    /* c05: Comparator define uma ordenação alternativa (por faturamento descrescente)
+     * diferença: Comparable é a ordem natural interna e fixa da classe
+     * Comparator é uma regra externa, permitindo criar ordenações variadas
+     * filtramos os registros finalizados e ordenamos do maior valor para o menor
+     */
+    public List<Registro> getRegistrosPorReceita() {
+        return registros.stream()
+                .filter(r -> r.getDataSaida() != null)
+                .sorted(Comparator.comparingDouble(Registro::getValorPago).reversed())
+                .collect(Collectors.toList());
+    }
+
+    // c06: calcula a receita total acumulada do estacionamento
+    // Percorre a lista e soma o valorPago apenas dos veículos que já saíram (finalizados)
+    public double calcularReceita() {
+        double total = 0;
+        for (Registro r : registros) {
+            if (r.getDataSaida() != null) {
+                total += r.getValorPago();
+            }
+        }
+        return total;
     }
 
     
