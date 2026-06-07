@@ -37,7 +37,7 @@ public class GerenciadorEstacionamento {
     public GerenciadorEstacionamento() {
         vagas = new HashMap<>(); 
         registros = new ArrayList<>(); //C02 aqui
-        mensalistas = new LinkedList<>(); //C03 adicionado agora!!
+        mensalistas = new LinkedList<>(); //C03 
         inicializarVagas();
     }
 
@@ -48,6 +48,39 @@ public class GerenciadorEstacionamento {
             vagas.put("A" + n, new Vaga("A" + n));
             vagas.put("B" + n, new Vaga("B" + n));
         }
+    }
+
+    /*
+        T03: calcula valor pago com base no tempo de permanencia e tipo do veiculo
+        Usando getTarifaHora() do enum TipoVeiculo, sem hard-code de valores
+        O calculo arredonda para cima e cobra no minimo 1 hora
+        ou seja 1h e 10min ->  cobra 2h, 0h e 30min -> cobra 1h
+    */
+    public Registro registrarSaida(String placa) throws VeiculoNaoEncontradoException {
+        // c02: busca linear no arraylist p/ achar reg. ativo da placa
+        Registro regAtivo = null;
+        for (Registro r : registros) {
+            if (r.getPlaca().equalsIgnoreCase(placa) && r.getDataSaida() == null) {
+                regAtivo = r;
+                break;
+            }
+        }
+        if (regAtivo == null) throw new VeiculoNaoEncontradoException(placa);
+
+        LocalDateTime saida = LocalDateTime.now();
+        regAtivo.setDataSaida(saida);
+
+        // t03: getTarifaHora() encapsula o preco no enum - sem "5.0", "10.0" hard-coded
+        long   min   = ChronoUnit.MINUTES.between(regAtivo.getDataEntrada(), saida);
+        double horas = Math.max(1.0, Math.ceil(min / 60.0));
+        regAtivo.setValorPago(horas * regAtivo.getTipoVeiculo().getTarifaHora());
+
+        // libera todas as vagas ocupadas pelo veiculo (1, 2 ou 3 dependendo do tipo)
+        for (String id : regAtivo.getIdsVagas()) {
+            Vaga v = vagas.get(id);
+            if (v != null) v.setStatus(StatusVaga.LIVRE);
+        }
+        return regAtivo;
     }
     
     //co3: cadastro de mensalista, adicionando a vaga como reservada
