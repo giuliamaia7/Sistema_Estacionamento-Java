@@ -23,8 +23,7 @@ import java.util.TreeSet;
 
 
 public class GerenciadorEstacionamento {
-
-    // regex p/ validar placa: ABC1234 (padrao) ou ABC1D23 (mercosul)
+// regex p/ validar placa: ABC1234 (padrao) ou ABC1D23 (mercosul)
     private static final String REGEX_PLACA = "^[A-Z]{3}\\d{4}$|^[A-Z]{3}\\d[A-Z]\\d{2}$";
 
 
@@ -38,10 +37,10 @@ public class GerenciadorEstacionamento {
     private ArrayList<Registro> registros;
 
     /* c03: linkedlist<mensalista> - escolha justificada:
-     *   cadastro/remocao de mensalistas ocorre nas pontas (add/remove) -> O(1)
-     *   linkedlist e lista duplamente encadeada: sem deslocamento de elementos
-     *   arraylist exigiria deslocamento O(n) para remover mensalista do meio, ineficiente
-     *   mensalistas nao precisam de acesso aleatorio por indice, iteracao sequencial é suficiente
+     * cadastro/remocao de mensalistas ocorre nas pontas (add/remove) -> O(1)
+     * linkedlist e lista duplamente encadeada: sem deslocamento de elementos
+     * arraylist exigiria deslocamento O(n) para remover mensalista do meio, ineficiente
+     * mensalistas nao precisam de acesso aleatorio por indice, iteracao sequencial é suficiente
      */
     private LinkedList<Mensalista> mensalistas;
 
@@ -74,7 +73,13 @@ public class GerenciadorEstacionamento {
         Verifica disponibilidade de todas as vagas necessárias antes de alocar (fail-fast)
          - evita alocar parcialmente e precisar desfazer se faltar vagas no meio
     */
-    public void registrarEntrada(String placa, TipoVeiculo tipo, String idVagaInicial)
+    /*
+        m03: adicionado synchronized para travar o metodo de entrada. como temos varias threads
+        rodando juntas no sistema, se duas tentarem dar entrada na mesma vaga no mesmo instante,
+        aconteceria uma condicao de corrida (race condition) e o mapa ficaria todo inconsistente.
+        com o synchronized(this), a thread pega o lock do gerenciador e bloqueia as outras ate terminar.
+    */
+    public synchronized void registrarEntrada(String placa, TipoVeiculo tipo, String idVagaInicial)
             throws VagaOcupadaException, PlacaInvalidaException {
 
         validarPlaca(placa);
@@ -99,11 +104,19 @@ public class GerenciadorEstacionamento {
 
         // c02: add() ao final do arraylist - O(1) amortizado
         Registro reg = new Registro(placa.toUpperCase(), tipo, ids, LocalDateTime.now());
+        
+        /* m04: pegamos o nome da thread que esta executando o registro no momento (ex: "entrada-1")
+            e guardamos dentro do objeto registro. essa variavel foi marcada como transient na classe,
+            entao ela vai ficar nula quando o arquivo for desserializado, servindo so para o log em tempo real.
+        */
+        reg.setThreadOrigem(Thread.currentThread().getName());
+
         registros.add(reg);
     }
 
     // t03: calcula valor usando getTarifaHora() do enum - ver commit T03
-    public Registro registrarSaida(String placa) throws VeiculoNaoEncontradoException {
+    // m03: synchronized na saida porque mexe na leitura e modificacao do arraylist e do hashmap de vagas compartilhados
+    public synchronized Registro registrarSaida(String placa) throws VeiculoNaoEncontradoException {
         // c02: busca linear no arraylist p/ achar reg. ativo da placa
         Registro regAtivo = null;
         for (Registro r : registros) {
@@ -140,7 +153,8 @@ public class GerenciadorEstacionamento {
     Usa o compareTo() criado na classe Registro (ordem cronológica de entrada)
     Evita duplicatas e mantem os logs sempre ordenados por data sem usar sort() 
     */
-    public TreeSet<Registro> getRegistrosOrdenados() {
+    // m03: sincronizado para evitar ler os registros enquanto outra thread adiciona ou altera dados
+    public synchronized TreeSet<Registro> getRegistrosOrdenados() {
         return new TreeSet<>(registros);
     }
 
@@ -149,7 +163,8 @@ public class GerenciadorEstacionamento {
      * Comparator é uma regra externa, permitindo criar ordenações variadas
      * filtramos os registros finalizados e ordenamos do maior valor para o menor
      */
-    public List<Registro> getRegistrosPorReceita() {
+    // m03: synchronized para travar o fluxo do stream enquanto os dados do patio estao mudando
+    public synchronized List<Registro> getRegistrosPorReceita() {
         return registros.stream()
                 .filter(r -> r.getDataSaida() != null)
                 .sorted(Comparator.comparingDouble(Registro::getValorPago).reversed())
@@ -158,7 +173,8 @@ public class GerenciadorEstacionamento {
 
     // c06: calcula a receita total acumulada do estacionamento
     // Percorre a lista e soma o valorPago apenas dos veículos que já saíram (finalizados)
-    public double calcularReceita() {
+    // m03: travado com synchronized para ler a lista compartilhada de forma segura
+    public synchronized double calcularReceita() {
         double total = 0;
         for (Registro r : registros) {
             if (r.getDataSaida() != null) {
@@ -170,7 +186,8 @@ public class GerenciadorEstacionamento {
 
     
     //co3: cadastro de mensalista, adicionando a vaga como reservada
-    public void cadastrarMensalista(Mensalista m) throws VagaOcupadaException {
+    // m03: os cadastros mudam as colecoes principais, entao o synchronized garante seguranca entre threads
+    public synchronized void cadastrarMensalista(Mensalista m) throws VagaOcupadaException {
         Vaga vaga = vagas.get(m.getIdVagaReservada());
         if (vaga == null || !vaga.isDisponivel()) {
             throw new VagaOcupadaException(m.getIdVagaReservada());
@@ -181,7 +198,8 @@ public class GerenciadorEstacionamento {
 
     // c03: remove mensalista via iterator - evita ConcurrentModificationException
     // iterator.remove() e o unico remove() seguro durante iter. na propria lista
-    public void removerMensalista(String placa) {
+    // m03: adicionado synchronized para ninguem alterar a lista enquanto o iterator estiver rodando
+    public synchronized void removerMensalista(String placa) {
         Iterator<Mensalista> it = mensalistas.iterator();
         while (it.hasNext()) {
             Mensalista m = it.next();
@@ -194,13 +212,15 @@ public class GerenciadorEstacionamento {
         }
     }
 
-    public boolean isMensalista(String placa) {
+    // m03: busca sincronizada para evitar leituras fantasmas enquanto mensalistas sao removidos ou adicionados
+    public synchronized boolean isMensalista(String placa) {
         for (Mensalista m : mensalistas)
             if (m.getPlaca().equalsIgnoreCase(placa)) return true;
         return false;
     }
 
-    public List<Vaga> getVagasDisponiveis() {
+    // m03: o monitor de vagas vai ficar chamando esse metodo toda hora, por isso precisa de sincronismo total
+    public synchronized List<Vaga> getVagasDisponiveis() {
         List<Vaga> livres = new ArrayList<>();
         for (Vaga v : vagas.values()) if (v.isDisponivel()) livres.add(v);
         livres.sort(Comparator.comparing(Vaga::getId));
@@ -208,22 +228,23 @@ public class GerenciadorEstacionamento {
     }
 
     //evita modificações externas nas structs internas
-    public Map<String, Vaga> getVagas() {
+    // m03: getters sincronizados para evitar ler dados corrompidos enquanto as colecoes estao sendo reescritas
+    public synchronized Map<String, Vaga> getVagas() {
         return Collections.unmodifiableMap(vagas);
     }
     // c02 ordem de chegada
-    public List<Registro> getRegistros() {
+    public synchronized List<Registro> getRegistros() {
         return Collections.unmodifiableList(registros);
     }
     // c03
-    public List<Mensalista> getMensalistas() {
+    public synchronized List<Mensalista> getMensalistas() {
         return Collections.unmodifiableList(mensalistas);
     }
 
-    public void restaurarDados(Map<String, Vaga> v, List<Registro> r, List<Mensalista> m) {
+    // m03: a restauracao de dados da inicializacao substitui as colecoes, travar e indispensavel
+    public synchronized void restaurarDados(Map<String, Vaga> v, List<Registro> r, List<Mensalista> m) {
         if (v != null && !v.isEmpty()) vagas       = new HashMap<>(v);
         if (r != null && !r.isEmpty()) registros   = new ArrayList<>(r);
         if (m != null && !m.isEmpty()) mensalistas  = new LinkedList<>(m);
     }
-
 }
