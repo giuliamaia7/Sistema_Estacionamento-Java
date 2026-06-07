@@ -1,6 +1,7 @@
 package parksys.services;
 
 import parksys.entities.Vaga;
+import parksys.entities.Vaga;
 import parksys.enums.StatusVaga;
 
 import java.util.Collections;
