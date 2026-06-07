@@ -6,6 +6,8 @@ import parksys.entities.Vaga;
 import parksys.enums.StatusVaga;
 import parksys.exceptions.VagaOcupadaException;
 import parksys.exceptions.VeiculoNaoEncontradoException;
+import parksys.enums.TipoVeiculo;
+import parksys.exceptions.PlacaInvalidaException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -15,8 +17,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Comparator;
+
 
 public class GerenciadorEstacionamento {
+
+    // regex p/ validar placa: ABC1234 (padrao) ou ABC1D23 (mercosul)
+    private static final String REGEX_PLACA = "^[A-Z]{3}\\d{4}$|^[A-Z]{3}\\d[A-Z]\\d{2}$";
+
+
 
     // c01: hashmap<string,vaga> - lookup O(1) p/ id da vaga
     // chave = cod  (ex: "A01"), val = obj Vaga c/ status atual
@@ -56,6 +65,42 @@ public class GerenciadorEstacionamento {
         O calculo arredonda para cima e cobra no minimo 1 hora
         ou seja 1h e 10min ->  cobra 2h, 0h e 30min -> cobra 1h
     */
+    /*
+        T04: registra entrada alocando vagas consecutivas conforme tipo do veiculo
+        Usa getVagasOcupadas() do enum TipoVeiculo p/ saber quantas vagas alocar
+         - Carro: 1 vaga, Moto: 1 vaga, Caminhao: 3 vagas
+        Verifica disponibilidade de todas as vagas necessárias antes de alocar (fail-fast)
+         - evita alocar parcialmente e precisar desfazer se faltar vagas no meio
+    */
+    public void registrarEntrada(String placa, TipoVeiculo tipo, String idVagaInicial)
+            throws VagaOcupadaException, PlacaInvalidaException {
+
+        validarPlaca(placa);
+
+        // t04: qtd vagas = dado de neg. do enum, nao magic number no cod.
+        int  qtd    = tipo.getVagasOcupadas();
+        char fileira = Character.toUpperCase(idVagaInicial.charAt(0));
+        int  num     = Integer.parseInt(idVagaInicial.substring(1));
+
+        // verifica disponibilidade de TODAS as vagas antes de alocar qualquer uma
+        // fail - fast evita alocar parcialmente e precisar desfazer
+        List<String> ids = new ArrayList<>(qtd);
+        for (int i = 0; i < qtd; i++) {
+            String id  = fileira + String.format("%02d", num + i);
+            Vaga   vag = vagas.get(id);
+            if (vag == null || !vag.isDisponivel()) throw new VagaOcupadaException(id);
+            ids.add(id);
+        }
+
+        // aloca todas as vagas verificadas acima
+        for (String id : ids) vagas.get(id).setStatus(StatusVaga.OCUPADA);
+
+        // c02: add() ao final do arraylist - O(1) amortizado
+        Registro reg = new Registro(placa.toUpperCase(), tipo, ids, LocalDateTime.now());
+        registros.add(reg);
+    }
+
+    // t03: calcula valor usando getTarifaHora() do enum - ver commit T03
     public Registro registrarSaida(String placa) throws VeiculoNaoEncontradoException {
         // c02: busca linear no arraylist p/ achar reg. ativo da placa
         Registro regAtivo = null;
@@ -82,6 +127,13 @@ public class GerenciadorEstacionamento {
         }
         return regAtivo;
     }
+    
+    // validacao de placa via regex - lanca exc. checada p/ forcar tratamento
+    private void validarPlaca(String placa) throws PlacaInvalidaException {
+        if (placa == null || placa.isBlank() || !placa.toUpperCase().matches(REGEX_PLACA))
+            throw new PlacaInvalidaException(placa);
+    }
+
     
     //co3: cadastro de mensalista, adicionando a vaga como reservada
     public void cadastrarMensalista(Mensalista m) throws VagaOcupadaException {
@@ -114,6 +166,12 @@ public class GerenciadorEstacionamento {
         return false;
     }
 
+    public List<Vaga> getVagasDisponiveis() {
+        List<Vaga> livres = new ArrayList<>();
+        for (Vaga v : vagas.values()) if (v.isDisponivel()) livres.add(v);
+        livres.sort(Comparator.comparing(Vaga::getId));
+        return livres;
+    }
 
     //evita modificações externas nas structs internas
     public Map<String, Vaga> getVagas() {
@@ -127,4 +185,11 @@ public class GerenciadorEstacionamento {
     public List<Mensalista> getMensalistas() {
         return Collections.unmodifiableList(mensalistas);
     }
+
+    public void restaurarDados(Map<String, Vaga> v, List<Registro> r, List<Mensalista> m) {
+        if (v != null && !v.isEmpty()) vagas       = new HashMap<>(v);
+        if (r != null && !r.isEmpty()) registros   = new ArrayList<>(r);
+        if (m != null && !m.isEmpty()) mensalistas  = new LinkedList<>(m);
+    }
+
 }
