@@ -6,6 +6,7 @@ import parksys.entities.Vaga;
 import parksys.enums.StatusVaga;
 import parksys.exceptions.VagaOcupadaException;
 import parksys.exceptions.VeiculoNaoEncontradoException;
+import parksys.observer.EstacionamentoObserver;
 import parksys.enums.TipoVeiculo;
 import parksys.exceptions.PlacaInvalidaException;
 import java.time.LocalDateTime;
@@ -22,11 +23,13 @@ import java.util.stream.Collectors;
 import java.util.TreeSet;
 
 
-public class GerenciadorEstacionamento {
-// regex p/ validar placa: ABC1234 (padrao) ou ABC1D23 (mercosul)
+public class GerenciadorEstacionamento {// regex p/ validar placa: ABC1234 (padrao) ou ABC1D23 (mercosul)
     private static final String REGEX_PLACA = "^[A-Z]{3}\\d{4}$|^[A-Z]{3}\\d[A-Z]\\d{2}$";
 
 
+
+    // p01: referencia estatica que guarda a instancia unica do singleton na memoria
+    private static GerenciadorEstacionamento instancia;
 
     // c01: hashmap<string,vaga> - lookup O(1) p/ id da vaga
     // chave = cod  (ex: "A01"), val = obj Vaga c/ status atual
@@ -44,11 +47,28 @@ public class GerenciadorEstacionamento {
      */
     private LinkedList<Mensalista> mensalistas;
 
-    public GerenciadorEstacionamento() {
+    // p03: lista de observadores cadastrados esperando atualizacao sobre a vaga
+    private List<EstacionamentoObserver> observadores;
+
+    /* p01: construtor privado impede uso do new fora daqui e trava objeto unico.
+     * garante que toda a aplicacao use a mesma estrutura de dados e colecoes.
+     */
+    private GerenciadorEstacionamento() {
         vagas = new HashMap<>(); 
         registros = new ArrayList<>(); //C02 aqui
         mensalistas = new LinkedList<>(); //C03 
+        observadores = new ArrayList<>(); // p03: inicializa a colecao de ouvintes
         inicializarVagas();
+    }
+
+    /* p01: pega a instancia compartilhada do gerenciador.
+     * synchronized na assinatura evita criacao duplicada por threads simultaneas.
+     */
+    public static synchronized GerenciadorEstacionamento getInstance() {
+        if (instancia == null) {
+            instancia = new GerenciadorEstacionamento();
+        }
+        return instancia;
     }
 
     // cria as 30 vagas do estacionamento (A01-A15, B01-B15) e popula o map
@@ -57,6 +77,29 @@ public class GerenciadorEstacionamento {
             String n = String.format("%02d", i);
             vagas.put("A" + n, new Vaga("A" + n));
             vagas.put("B" + n, new Vaga("B" + n));
+        }
+    }
+
+    /* p03: adiciona um novo observador na lista de transmissao.
+     * p06: chamado ao iniciar o monitor na tela do sistema.
+     */
+    public synchronized void addObserver(EstacionamentoObserver obs) {
+        if (!observadores.contains(obs)) {
+            observadores.add(obs);
+        }
+    }
+
+    /* p03: remove o observador cadastrado na lista.
+     * p06: chamado ao fechar a janela para liberar recurso da interface.
+     */
+    public synchronized void removeObserver(EstacionamentoObserver obs) {
+        observadores.remove(obs);
+    }
+
+    // p03: varre a lista de observers cadastrados e dispara o aviso de mudanca de status
+    private void notificarObservadores(String idVaga, StatusVaga novoStatus) {
+        for (EstacionamentoObserver obs : observadores) {
+            obs.onVagaAlterada(idVaga, novoStatus);
         }
     }
 
@@ -99,8 +142,11 @@ public class GerenciadorEstacionamento {
             ids.add(id);
         }
 
-        // aloca todas as vagas verificadas acima
-        for (String id : ids) vagas.get(id).setStatus(StatusVaga.OCUPADA);
+        // aloca todas as vagas verificadas acima e atualiza o observer
+        for (String id : ids) {
+            vagas.get(id).setStatus(StatusVaga.OCUPADA);
+            notificarObservadores(id, StatusVaga.OCUPADA); // p03: atualiza o estado visual da vaga no painel
+        }
 
         // c02: add() ao final do arraylist - O(1) amortizado
         Registro reg = new Registro(placa.toUpperCase(), tipo, ids, LocalDateTime.now());
@@ -135,10 +181,13 @@ public class GerenciadorEstacionamento {
         double horas = Math.max(1.0, Math.ceil(min / 60.0));
         regAtivo.setValorPago(horas * regAtivo.getTipoVeiculo().getTarifaHora());
 
-        // libera todas as vagas ocupadas pelo veiculo (1, 2 ou 3 dependendo do tipo)
+        // libera todas as vagas ocupadas pelo veiculo e avisa o monitor cadastrado
         for (String id : regAtivo.getIdsVagas()) {
             Vaga v = vagas.get(id);
-            if (v != null) v.setStatus(StatusVaga.LIVRE);
+            if (v != null) {
+                v.setStatus(StatusVaga.LIVRE);
+                notificarObservadores(id, StatusVaga.LIVRE); // p03: limpa a cor da vaga na interface
+            }
         }
         return regAtivo;
     }
@@ -194,6 +243,7 @@ public class GerenciadorEstacionamento {
         }
         vaga.setStatus(StatusVaga.RESERVADA);
         mensalistas.add(m); // add nas pontas = O(1) na linkedlist
+        notificarObservadores(m.getIdVagaReservada(), StatusVaga.RESERVADA); // p03: muda o mapa de cor da reserva
     }
 
     // c03: remove mensalista via iterator - evita ConcurrentModificationException
@@ -205,7 +255,10 @@ public class GerenciadorEstacionamento {
             Mensalista m = it.next();
             if (m.getPlaca().equalsIgnoreCase(placa)) {
                 Vaga vaga = vagas.get(m.getIdVagaReservada());
-                if (vaga != null) vaga.setStatus(StatusVaga.LIVRE);
+                if (vaga != null) {
+                    vaga.setStatus(StatusVaga.LIVRE);
+                    notificarObservadores(m.getIdVagaReservada(), StatusVaga.LIVRE); // p03: libera a vaga visualmente
+                }
                 it.remove(); // remove seguro via iterator
                 break;
             }
