@@ -13,8 +13,7 @@ import java.awt.geom.RoundRectangle2D;
 // p01: pega a instancia unica do gerenciador via getInstance() — padrao Singleton
 // p06: registra o PainelMonitor como observer ao abrir e remove ao fechar
 // s06: desserializa os dados ao abrir e serializa no windowClosing
-public class TelaInicial extends JFframe {
-
+public class TelaInicial extends JFrame {
  
     // nome do arquivo .ser onde os dados ficam salvos entre sessoes
     // em js seria o equivalente ao nome da chave no localStorage
