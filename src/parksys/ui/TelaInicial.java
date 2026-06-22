@@ -64,11 +64,12 @@ public class TelaInicial extends JFrame {
         setTitle("Gestao de Estacionamento");
  
         // setSize define largura e altura fixas — em css seria width: 460px; height: 460px;
-        setSize(460, 460);
+        setSize(700, 600);
  
         // centraliza na tela — em css seria margin: auto; numa div de tamanho fixo
         setLocationRelativeTo(null);
-        setResizable(false);
+        setResizable(true);
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
  
         // PainelFundoImagem e um JPanel customizado que desenha fundo.jpg por baixo de tudo
         // em css seria o div raiz com background-image: url('fundo.jpg'); background-size: cover;
