@@ -55,7 +55,36 @@ src/
 
 ## Como Executar
 
-*Em desenvolvimento.*
+### Pré-requisitos
+
+- JDK 11 ou superior instalado
+- Arquivo `fundo.jpg` no classpath (pasta raiz do projeto ou `src/`) para a imagem de fundo da tela inicial
+
+### Via linha de comando
+
+```bash
+# 1. Compile todos os arquivos .java
+javac -d out $(find parksys -name "*.java")
+
+# 2. Execute a classe principal
+java -cp out parksys.main.Principal
+```
+
+### Via IDE (IntelliJ / Eclipse / VS Code)
+
+1. Importe o projeto como **Java Project** apontando para a pasta raiz
+2. Defina `parksys.main.Principal` como classe principal
+3. Execute com `Run` ou `F5`
+
+### Comportamento ao iniciar
+
+Ao executar, o sistema:
+
+1. Imprime uma demonstração de multithreading no console
+2. Exibe o relatório de threads de origem dos registros
+3. Abre a interface gráfica Swing automaticamente
+
+---
 
 ## Requisitos Funcionais
 
