@@ -98,7 +98,20 @@ Ao executar, o sistema:
 2. Exibe o relatório de threads de origem dos registros
 3. Abre a interface gráfica Swing automaticamente
 
----
+
+
+# Branches
+```
+| Branch               | Descrição                   |
+| -------------------- | --------------------------- |
+| main                 | Versão principal do projeto |
+| feature/enums        | Implementação dos enums     |
+| feature/entities     | Classes de domínio          |
+| feature/services     | Regras de negócio           |
+| feature/threads      | Recursos de concorrência    |
+| feature/patterns     | Padrões de projeto          |
+```
+
 
 ## Requisitos Funcionais
 
