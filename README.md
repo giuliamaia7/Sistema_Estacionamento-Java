@@ -12,6 +12,20 @@ Projeto desenvolvido como atividade avaliativa da disciplina de Programação Or
 - Natália
 - Yara
 
+
+# Tecnologias
+```
+| Tecnologia            | Finalidade                |
+| --------------------- | ------------------------- |
+| Java 17               | Linguagem principal       |
+| Java Swing            | Interface gráfica         |
+| Collections Framework | Estruturas de dados       |
+| Serialização Java     | Persistência dos dados    |
+| Threads               | Processamento concorrente |
+| Git/GitHub            | Versionamento do projeto  |
+
+```
+
 ## Estrutura do Projeto
 
 ```text
@@ -95,3 +109,4 @@ O sistema possui as seguintes funcionalidades:
 - Cadastro de mensalistas;
 - Cálculo automático de tarifas por tipo de veículo;
 - Emissão de relatórios.
+
